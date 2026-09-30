@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Hackers vs Blue Team</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;600;700&display=swap');
+  
+  :root {
+    --term-bg: #050505;
+    --term-fg: #00ff00;
+    --term-dim: #005500;
+    --term-err: #ff003c;
+    --term-warn: #ffaa00;
+    --term-info: #00eeff;
+  }
+
+  body {
+    font-family: 'Fira Code', 'Courier New', monospace;
+    background-color: var(--term-bg);
+    color: var(--term-fg);
+    overflow-x: hidden;
+  }
+  
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: var(--term-dim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--term-fg); }
+  [hidden] { display: none !important; }
+
+  @keyframes flash-red {
+    0% { box-shadow: inset 0 0 120px var(--term-err); background-color: rgba(255,0,0,0.1); }
+    100% { box-shadow: inset 0 0 0px transparent; background-color: transparent; }
+  }
+  @keyframes flash-green {
+    0% { box-shadow: inset 0 0 120px var(--term-fg); background-color: rgba(0,255,0,0.1); }
+    100% { box-shadow: inset 0 0 0px transparent; background-color: transparent; }
+  }
+  
+  .fx-error { animation: flash-red 0.6s ease-out; }
+  .fx-success { animation: flash-green 0.6s ease-out; }
+
+  input:focus { outline: none; }
+  .c-ok { color: var(--term-fg); }
+  .c-err { color: var(--term-err); }
+  .c-warn { color: var(--term-warn); }
+  .c-dim { color: var(--term-dim); }
+  .c-info { color: var(--term-info); }
+
+  .ascii-art {
+    font-size: clamp(8px, 2vw, 14px);
+    line-height: 1.1;
+    white-space: pre;
+    text-shadow: 0 0 5px var(--term-fg);
+  }
+
+  .glitch { position: relative; display: inline-block; }
+  .glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--term-bg);
+  }
+  .glitch::before {
+    left: 2px; text-shadow: -1px 0 red;
+    clip: rect(24px, 550px, 90px, 0);
+    animation: glitch-anim 2s infinite linear alternate-reverse;
+  }
+  .glitch::after {
+    left: -2px; text-shadow: -1px 0 blue;
+    clip: rect(85px, 550px, 140px, 0);
+    animation: glitch-anim 2.5s infinite linear alternate-reverse;
+  }
+  @keyframes glitch-anim {
+    0% { clip: rect(10px, 9999px, 81px, 0); }
+    20% { clip: rect(66px, 9999px, 18px, 0); }
+    40% { clip: rect(23px, 9999px, 59px, 0); }
+    60% { clip: rect(80px, 9999px, 35px, 0); }
+    80% { clip: rect(5px, 9999px, 92px, 0); }
+    100% { clip: rect(45px, 9999px, 11px, 0); }
+  }
+</style>
+</head>
+<body class="flex flex-col h-screen select-none">
+
+<!-- View: Main Menu -->
+<div id="v-menu" class="view flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12">
+  <div class="space-y-4">
+    <h1 class="text-4xl md:text-6xl font-bold glitch uppercase tracking-widest c-ok" data-text="HACK_OS // NETWORK">HACK_OS // NETWORK</h1>
+    <p class="c-dim text-lg md:text-xl">Hackers derrubam a rede. Blue Team defende.</p>
+  </div>
+  <div class="flex flex-col sm:flex-row gap-6 w-full max-w-lg">
+    <button onclick="window.ui.show('v-host-setup');" class="flex-1 px-8 py-4 bg-transparent border-2 border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00] hover:text-black font-bold text-xl transition-all uppercase tracking-wider">Host Game</button>
+    <button onclick="window.ui.show('v-join');" class="flex-1 px-8 py-4 bg-transparent border-2 border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00] hover:text-black font-bold text-xl transition-all uppercase tracking-wider">Join Game</button>
+  </div>
+</div>
+
+<!-- View: Host Setup -->
+<div id="v-host-setup" class="view flex-1 p-6 max-w-4xl mx-auto w-full flex flex-col" hidden>
+  <div class="border border-[#00ff00] p-6 mb-8 relative">
+    <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-[#00ff00] font-bold">CONFIGURAÇÕES DE REDE (HOST)</div>
+    <div class="flex flex-wrap gap-6 mb-6">
+      <label class="flex flex-col gap-2">
+        <span class="c-dim">Qtd Servidores (Alvos):</span>
+        <input id="h-nsrv" type="number" min="5" max="30" value="10" class="w-24 bg-transparent border border-[#005500] p-2 text-center text-[#00ff00]">
+      </label>
+      <label class="flex flex-col gap-2">
+        <span class="c-dim">Tempo Limite (seg):</span>
+        <input id="h-dur" type="number" min="60" max="900" value="300" class="w-32 bg-transparent border border-[#005500] p-2 text-center text-[#00ff00]">
+      </label>
+    </div>
+    <button id="btn-create-room" onclick="host.createRoom()" class="w-full py-3 bg-[#005500] hover:bg-[#00ff00] hover:text-black text-[#00ff00] font-bold uppercase border border-[#00ff00] transition-colors">Inicializar Servidor Central</button>
+  </div>
+  
+  <div id="h-lobby-area" class="border border-[#00ff00] p-6 flex-1 flex flex-col relative" hidden>
+    <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-[#00ff00] font-bold">SALA DE ESPERA</div>
+    <div class="text-center mb-6">
+      <p class="c-dim text-lg mb-2">Código da Sala para os jogadores:</p>
+      <h2 id="h-room-code" class="text-5xl md:text-7xl font-bold tracking-[0.2em] c-ok drop-shadow-[0_0_10px_rgba(0,255,0,0.8)]">----</h2>
+    </div>
+    <div class="flex-1 border border-[#005500] p-4 overflow-y-auto mb-6">
+      <h3 class="c-dim mb-4 border-b border-[#005500] pb-2">Conexões Estabelecidas:</h3>
+      <div id="h-lobby-players" class="flex flex-col gap-2"></div>
+    </div>
+    <button id="btn-start-game" onclick="host.startGame()" class="w-full py-4 bg-[#00ff00] text-black font-bold text-xl uppercase transition-colors shadow-[0_0_15px_#00ff00] hover:bg-white disabled:opacity-50 disabled:shadow-none" disabled>Iniciar Partida (Requer 2+ Jogadores)</button>
+  </div>
+</div>
+
+<!-- View: Player Join -->
+<div id="v-join" class="view flex-1 flex flex-col items-center justify-center p-6 text-center" hidden>
+  <div class="border border-[#00ff00] p-8 max-w-md w-full relative bg-black shadow-[0_0_20px_rgba(0,255,0,0.1)]">
+    <div class="absolute -top-3 left-4 bg-black px-2 text-[#00ff00] font-bold">INJETAR CONEXÃO</div>
+    
+    <div class="flex flex-col gap-6 text-left">
+      <label class="flex flex-col gap-2">
+        <span class="c-dim uppercase">Código da Sala (4 letras):</span>
+        <input id="p-code" maxlength="4" autocomplete="off" class="px-4 py-3 bg-transparent border border-[#00ff00] focus:border-white focus:text-white text-[#00ff00] font-bold text-2xl uppercase tracking-widest text-center transition-all">
+      </label>
+      <label class="flex flex-col gap-2">
+        <span class="c-dim uppercase">Seu Alias (Nome):</span>
+        <input id="p-name" maxlength="12" autocomplete="off" class="px-4 py-3 bg-transparent border border-[#00ff00] focus:border-white focus:text-white text-[#00ff00] font-bold text-xl text-center transition-all">
+      </label>
+      <button onclick="player.joinRoom()" class="mt-4 px-6 py-4 bg-[#00ff00] text-black font-bold text-xl uppercase hover:bg-white transition-all shadow-[0_0_10px_#00ff00]">Conectar >_</button>
+      <p id="p-join-msg" class="text-sm c-err text-center min-h-[20px] font-mono mt-2"></p>
+    </div>
+  </div>
+</div>
+
+<!-- View: Player Perk Selection -->
+<div id="v-perks" class="view flex-1 flex flex-col items-center p-6 max-w-4xl mx-auto w-full overflow-y-auto" hidden>
+  <div class="text-center mb-8">
+    <h2 class="text-2xl font-bold c-ok mb-2 uppercase">Conexão Estabelecida!</h2>
+    <p class="c-dim">A partida iniciará em breve. Escolha 1 PERK para carregar no seu terminal.<br>Você não sabe qual será seu time, escolha com sabedoria.</p>
+  </div>
+  
+  <div class="grid md:grid-cols-2 gap-8 w-full">
+    <!-- Hacker Perks -->
+    <div class="border border-red-900 bg-red-950/20 p-6 flex flex-col gap-4 relative">
+      <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-red-500 font-bold text-sm">SE CAIR COMO HACKER</div>
+      
+      <button onclick="player.selectPerk('ghost')" id="btn-perk-ghost" class="perk-btn p-4 border border-red-800 text-left hover:bg-red-900/50 transition-colors group">
+        <div class="font-bold text-red-500 mb-1 group-hover:text-white">Ghost Protocol</div>
+        <div class="text-sm text-red-700">Seu 1º ataque que falhar não deixará rastros do seu IP nos logs.</div>
+      </button>
+      
+      <button onclick="player.selectPerk('overclock')" id="btn-perk-overclock" class="perk-btn p-4 border border-red-800 text-left hover:bg-red-900/50 transition-colors group">
+        <div class="font-bold text-red-500 mb-1 group-hover:text-white">Overclock</div>
+        <div class="text-sm text-red-700">Reduz o cooldown do comando 'attack' em 2 segundos.</div>
+      </button>
+
+      <!-- NOVO PERK ADICIONADO -->
+      <button onclick="player.selectPerk('rootkit')" id="btn-perk-rootkit" class="perk-btn p-4 border border-red-800 text-left hover:bg-red-900/50 transition-colors group">
+        <div class="font-bold text-red-500 mb-1 group-hover:text-white">Rootkit</div>
+        <div class="text-sm text-red-700">Servidores derrubados por você exigem mais tempo de cooldown para o Blue Team recuperar.</div>
+      </button>
+    </div>
+
+    <!-- Blue Team Perks -->
+    <div class="border border-blue-900 bg-blue-950/20 p-6 flex flex-col gap-4 relative">
+      <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-blue-400 font-bold text-sm">SE CAIR COMO BLUE TEAM</div>
+      
+      <button onclick="player.selectPerk('sysadmin')" id="btn-perk-sysadmin" class="perk-btn p-4 border border-blue-800 text-left hover:bg-blue-900/50 transition-colors group">
+        <div class="font-bold text-blue-400 mb-1 group-hover:text-white">Sysadmin</div>
+        <div class="text-sm text-blue-700">Garante o dobro de tempo (24s) para ler e responder as questões teóricas de 'restore'.</div>
+      </button>
+      
+      <button onclick="player.selectPerk('tracer')" id="btn-perk-tracer" class="perk-btn p-4 border border-blue-800 text-left hover:bg-blue-900/50 transition-colors group">
+        <div class="font-bold text-blue-400 mb-1 group-hover:text-white">Tracer</div>
+        <div class="text-sm text-blue-700">Ao usar 'logs', revela um dígito extra do IP mascarado do hacker.</div>
+      </button>
+      
+      <button onclick="player.selectPerk('firewall')" id="btn-perk-firewall" class="perk-btn p-4 border border-blue-800 text-left hover:bg-blue-900/50 transition-colors group">
+        <div class="font-bold text-blue-400 mb-1 group-hover:text-white">Firewall Reforçado</div>
+        <div class="text-sm text-blue-700">Se você sofrer um ataque DDoS, o tempo que o terminal fica travado cai pela metade.</div>
+      </button>
+    </div>
+  </div>
+  
+  <div class="mt-8 text-center p-4 border border-gray-700 w-full mb-8" id="perk-status">
+    <span class="c-dim animate-pulse">Aguardando seleção de Perk...</span>
+  </div>
+</div>
+
+<!-- View: Host Dashboard (Game) -->
+<div id="v-host-game" class="view h-screen flex-col p-4 max-w-[1600px] mx-auto w-full gap-4" hidden>
+  <div class="border border-[#00ff00] p-4 flex justify-between items-center bg-[#002200]">
+    <div class="font-bold text-2xl uppercase">HACK_OS Dashboard</div>
+    <div class="flex items-center gap-8">
+      <div class="c-dim text-sm text-right">Tempo Restante<br><span id="hd-timer" class="text-3xl c-ok font-bold">0:00</span></div>
+      <div class="c-dim text-sm text-right">Status da Rede<br><span id="hd-servers" class="text-3xl c-info font-bold">0/0</span></div>
+    </div>
+  </div>
+  
+  <div class="flex flex-1 gap-4 min-h-0">
+    <div class="flex-[2] border border-[#00ff00] p-4 flex flex-col min-h-0 relative">
+      <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-[#00ff00] font-bold text-sm">INFRAESTRUTURA DE SERVIDORES</div>
+      <div id="hd-srv-grid" class="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto content-start mt-2"></div>
+    </div>
+    
+    <div class="flex-1 flex flex-col gap-4 min-h-0">
+      <div class="flex-1 border border-[#005500] p-4 flex flex-col min-h-0 relative">
+        <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-[#005500] font-bold text-sm">NODES (CLIENTES)</div>
+        <div id="hd-players" class="flex-1 overflow-y-auto mt-2 text-sm space-y-1"></div>
+      </div>
+      <div class="flex-1 border border-[#005500] p-4 flex flex-col min-h-0 relative">
+        <div class="absolute -top-3 left-4 bg-[#050505] px-2 text-[#005500] font-bold text-sm">LOGS DE SEGURANÇA</div>
+        <div id="hd-events" class="flex-1 overflow-y-auto mt-2 text-xs space-y-1 font-mono"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View: Player Terminal (Game) -->
+<div id="v-player-game" class="view h-screen flex-col bg-[#050505] w-full max-w-5xl mx-auto" hidden>
+  <div id="pt-header" class="border-b border-[#005500] p-2 flex flex-col shrink-0">
+    <div class="ascii-art c-ok font-bold mb-2">
+  _   _    _    ____ _  __    ___  ____  
+ | | | |  / \  / ___| |/ /   / _ \/ ___| 
+ | |_| | / _ \| |   | ' /___| | | \___ \ 
+ |  _  |/ ___ \ |___| . \___| |_| |___) |
+ |_| |_/_/   \_\____|_|\_\   \___/|____/ 
+    </div>
+    <div class="flex flex-wrap justify-between items-center text-sm gap-2 px-2 bg-[#001100] border border-[#003300] py-1">
+      <div id="pt-role" class="font-bold px-2 py-0.5 rounded">CARGANDO...</div>
+      <div class="c-info">IP: <span id="pt-ip" class="font-bold"></span></div>
+      <div class="c-warn">PERK: <span id="pt-perk" class="font-bold uppercase"></span></div>
+      <div class="c-ok">TEMPO: <span id="pt-time" class="font-bold"></span>s</div>
+    </div>
+    <div id="pt-status" class="mt-2 text-center font-bold text-sm min-h-[30px] flex items-center justify-center"></div>
+  </div>
+  
+  <div id="pt-output" class="flex-1 overflow-y-auto p-4 space-y-1 break-words whitespace-pre-wrap text-sm md:text-base font-mono relative pb-8">
+    <div class="c-dim">Inicializando kernel... OK</div>
+    <div class="c-dim">Estabelecendo túnel seguro... OK</div>
+    <div class="c-ok mb-4">Bem-vindo ao HACK_OS v1.0. A missão começou. Digite 'help' para ajuda.</div>
+  </div>
+  
+  <div class="shrink-0 flex flex-col">
+    <div id="pt-cheatsheet" class="bg-[#001100] p-3 border-y border-[#00ff00] flex flex-wrap gap-3 justify-center text-[13px] md:text-sm shadow-md z-10 relative"></div>
+    <div class="flex items-center p-3 bg-black">
+      <span id="pt-prompt" class="text-[#00ff00] mr-2 font-bold text-lg select-none">&gt;</span>
+      <input id="pt-in" class="flex-1 bg-transparent border-none outline-none text-[#00ff00] text-base md:text-lg font-mono focus:ring-0 placeholder-[#003300]" autocomplete="off" spellcheck="false" placeholder="_">
+    </div>
+  </div>
+</div>
+
+<!-- View: End Screen -->
+<div id="v-end" class="view flex-1 flex flex-col items-center justify-center p-6 text-center w-full overflow-y-auto" hidden>
+  <div class="border border-[#00ff00] p-8 max-w-4xl w-full bg-[#001100] my-auto">
+    <h1 id="end-title" class="text-4xl md:text-6xl font-bold uppercase tracking-widest mb-4 glitch"></h1>
+    <p id="end-reason" class="text-xl c-dim mb-8"></p>
+    
+    <div id="end-mvp" class="flex flex-col md:flex-row gap-4 mb-8 justify-center"></div>
+    <div id="end-audit" class="text-left border border-[#005500] p-4 mb-8 bg-black"></div>
+    
+    <div class="text-left border border-[#005500] p-4 max-h-64 overflow-y-auto mb-8 bg-black">
+      <h3 class="c-dim mb-4 border-b border-[#005500] pb-2 font-bold">DUMP DE IDENTIDADES:</h3>
+      <div id="end-roles" class="flex flex-col gap-2"></div>
+    </div>
+    
+    <button onclick="sessionStorage.clear(); location.reload()" class="px-8 py-4 bg-transparent border border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00] hover:text-black font-bold text-xl uppercase transition-colors w-full">Reiniciar Sistema</button>
+  </div>
+</div>
+
+<script type="module">
+window.$ = s => document.querySelector(s);
+window.ui = {
+  show: (id) => {
+    document.querySelectorAll('.view').forEach(v => {
+      if (v.id === id) { v.hidden = false; v.style.display = v.classList.contains('flex-col') || v.classList.contains('flex') ? 'flex' : 'block'; }
+      else { v.hidden = true; v.style.display = 'none'; }
+    });
+  },
+  print: (text, type = 'ok') => {
+    const out = document.getElementById('pt-output');
+    const div = document.createElement('div');
+    div.className = `c-${type}`;
+    div.innerHTML = Array.isArray(text) ? text.join('<br>') : text;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+  },
+  clear: () => { document.getElementById('pt-output').innerHTML = ''; },
+  flash: (type) => {
+    const el = document.getElementById('v-player-game');
+    el.classList.remove('fx-error', 'fx-success');
+    void el.offsetWidth;
+    el.classList.add(`fx-${type}`);
+  }
+};
+
+let initializeApp, getAuth, signInAnonymously, getFirestore, doc, setDoc, updateDoc, getDoc, onSnapshot;
+try {
+  ({ initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"));
+  ({ getAuth, signInAnonymously } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"));
+  ({ getFirestore, doc, setDoc, updateDoc, getDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"));
+} catch (e) {
+  console.error('Falha ao carregar Firebase:', e);
+  alert('Não foi possível carregar o Firebase. Verifique sua conexão.');
+}
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDcoOQM9f4muHyQI75Ivt0XQA_FluUE7t8",
+    authDomain: "terminalgame-df026.firebaseapp.com",
+    projectId: "terminalgame-df026",
+    storageBucket: "terminalgame-df026.firebasestorage.app",
+    messagingSenderId: "431530748844",
+    appId: "1:431530748844:web:e74d0c1d29335c0fd6a809"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+window.appId = 'hackers-vs-blueteam';
+window.userId = null;
+window.roomCode = null;
+window.isHost = false;
+window.gameState = null;
+
+const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pad = (n) => n.toString().padStart(2, '0');
+const maskIp = (ip, revealBlocks) => ip.split('.').map((p, i) => i < revealBlocks ? p : '***').join('.');
+const hhmm = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const escapeHtml = (unsafe) => (unsafe || '').toString().replace(/[&<"'>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+
+const quizQuestions = [
+  { q: "Qual é a principal função do cliente?", opts: "[A] Armazenar todos dados  [B] Solicitar serviços ao servidor  [C] Processar regras do negócio  [D] Hospedar banco", a: "B", just: "O cliente inicia a comunicação; quem armazena/processa dados centrais é o servidor." },
+  { q: "Qual protocolo é a base da comunicação web atual?", opts: "[A] FTP  [B] HTTP/HTTPS  [C] SMTP  [D] SSH", a: "B", just: "HTTP/HTTPS define o formato das requisições web entre clientes e servidores." },
+  { q: "O que caracteriza a arquitetura de 3 camadas (3-tier)?", opts: "[A] Cliente/Servidor iguais  [B] Sem separação lógica  [C] Separação: interface, lógica e dados  [D] Rede exclusiva P2P", a: "C", just: "Divide o sistema em Apresentação, Regras de Negócio e Banco de Dados." },
+  { q: "Qual é uma desvantagem clássica do modelo cliente-servidor?", opts: "[A] Impossível centralizar  [B] Ponto único de falha  [C] Sem nenhuma segurança  [D] Não permite escalonamento", a: "B", just: "Se o servidor principal cai ou sobrecarrega, todos os clientes perdem o acesso." },
+  { q: "No modelo P2P, qual a principal diferença do cliente-servidor?", opts: "[A] Não há comunicação  [B] Todos nós são cliente/servidor simultaneamente  [C] Apenas um nó envia", a: "B", just: "No P2P não há papel fixo. Cada máquina pode pedir e fornecer recursos ao mesmo tempo." },
+  { q: "O que é uma API REST no contexto cliente-servidor?", opts: "[A] Servidor físico  [B] Protocolo bancário  [C] Padrão de comunicação via HTTP", a: "C", just: "APIs REST padronizam como sistemas conversam entre si usando métodos web." },
+  { q: "Num sistema de banco online, quem representa o 'cliente'?", opts: "[A] Banco de dados  [B] O App/Navegador do correntista  [C] Servidor de autenticação", a: "B", just: "O cliente é a interface final que você (o usuário) utiliza para pedir serviços." },
+  { q: "Por que centralizar recursos num Servidor corporativo?", opts: "[A] Facilita backup e controle de acesso  [B] Elimina segurança  [C] Impede múltiplos acessos", a: "A", just: "A centralização torna o controle e as manutenções da TI mais fáceis e seguras." }
+];
+
+const getRoomRef = (code) => doc(db, 'artifacts', window.appId, 'rooms', code);
+
+async function initAuth() {
+  try {
+    await signInAnonymously(auth);
+    window.userId = auth.currentUser.uid;
+    
+    const savedRoom = sessionStorage.getItem('roomCode');
+    const savedIsHost = sessionStorage.getItem('isHost') === 'true';
+    
+    if (savedRoom) {
+      const snap = await getDoc(getRoomRef(savedRoom));
+      if (snap.exists()) {
+        window.roomCode = savedRoom;
+        window.isHost = savedIsHost;
+        
+        if (savedIsHost && snap.data().hostId === window.userId) {
+          window.ui.show(snap.data().status === 'lobby' ? 'v-host-setup' : 'v-host-game');
+          if (snap.data().status === 'lobby') {
+            document.getElementById('h-lobby-area').hidden = false;
+            document.getElementById('h-room-code').innerText = savedRoom;
+          }
+        }
+        listenToRoom(savedRoom);
+      } else {
+        sessionStorage.clear();
+      }
+    }
+  } catch (e) {
+    console.error("Auth failed:", e);
+    document.getElementById('p-join-msg').innerText = "Erro ao conectar autenticação.";
+  }
+}
+initAuth();
+
+window.host = {
+  createRoom: async () => {
+    if (!window.userId) return;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    window.roomCode = Array.from({length: 4}, () => chars[rnd(0,25)]).join('');
+    window.isHost = true;
+    
+    sessionStorage.setItem('roomCode', window.roomCode);
+    sessionStorage.setItem('isHost', 'true');
+    
+    const nsrv = parseInt(document.getElementById('h-nsrv').value) || 10;
+    const dur = parseInt(document.getElementById('h-dur').value) || 180;
+    
+    await setDoc(getRoomRef(window.roomCode), {
+      status: 'lobby',
+      settings: { nSrv: Math.min(30, Math.max(5, nsrv)), dur: Math.min(900, Math.max(60, dur)) },
+      hostId: window.userId,
+      players: {},
+      servers: [],
+      events: [],
+      endAt: 0,
+      winner: null,
+      winReason: ''
+    });
+
+    document.getElementById('h-room-code').innerText = window.roomCode;
+    window.ui.show('v-host-setup');
+    document.getElementById('h-lobby-area').hidden = false;
+    listenToRoom(window.roomCode);
+  },
+  
+  startGame: async () => {
+    if (!window.gameState || !window.gameState.players) return;
+    const uids = Object.keys(window.gameState.players);
+    if (uids.length < 2) return;
+    
+    const shuffledUids = [...uids].sort(() => Math.random() - 0.5);
+    const nHackers = Math.max(1, Math.floor(shuffledUids.length / 3));
+    const usedIps = new Set();
+    
+    const updates = {};
+    shuffledUids.forEach((uid, index) => {
+      let ip; do { ip = `192.168.${rnd(1, 100)}.${rnd(2, 254)}`; } while (usedIps.has(ip)); usedIps.add(ip);
+      updates[`players.${uid}.role`] = index < nHackers ? 'hacker' : 'blueteam';
+      updates[`players.${uid}.ip`] = ip;
+      updates[`players.${uid}.blocked`] = false;
+      updates[`players.${uid}.lockUntil`] = 0;
+      updates[`players.${uid}.cd`] = { attack:0, jam:0, ddos:0, restore:0, block:0 };
+      updates[`players.${uid}.ghostUsed`] = false;
+      updates[`players.${uid}.chal`] = null;
+      updates[`players.${uid}.stats`] = { hacks: 0, restores: 0, blocks: 0, missed: [] };
+    });
+
+    updates['servers'] = Array.from({length: window.gameState.settings.nSrv}, (_, i) => ({
+      id: `SRV-${pad(i+1)}`, ip: `10.0.${rnd(1,20)}.${rnd(10,250)}`, up: true, traces: []
+    }));
+    updates['status'] = 'playing';
+    updates['endAt'] = Date.now() + (window.gameState.settings.dur * 1000);
+    updates['events'] = [{ t: hhmm(), txt: 'SISTEMA INICIALIZADO. SERVIDORES ONLINE.' }];
+
+    await updateDoc(getRoomRef(window.roomCode), updates);
+    window.ui.show('v-host-game');
+  }
+};
+
+window.player = {
+  joinRoom: async () => {
+    if (!window.userId) return;
+    const code = document.getElementById('p-code').value.toUpperCase();
+    const name = document.getElementById('p-name').value.trim() || 'Anon';
+    const msgEl = document.getElementById('p-join-msg');
+    
+    if (code.length !== 4) { msgEl.innerText = "Código inválido."; return; }
+    msgEl.innerText = "Conectando...";
+    
+    try {
+      const snap = await getDoc(getRoomRef(code));
+      if (!snap.exists()) { msgEl.innerText = "Sala não encontrada."; return; }
+      if (snap.data().status !== 'lobby') { msgEl.innerText = "A partida já começou."; return; }
+      
+      window.roomCode = code;
+      sessionStorage.setItem('roomCode', window.roomCode);
+      sessionStorage.setItem('isHost', 'false');
+      
+      await updateDoc(getRoomRef(code), {
+        [`players.${window.userId}`]: { name: name, perk: null, role: null, isReady: true, stats: { hacks: 0, restores: 0, blocks: 0, missed: [] } }
+      });
+      listenToRoom(code);
+      window.ui.show('v-perks');
+    } catch (e) {
+      console.error(e);
+      msgEl.innerText = "Erro ao entrar na sala.";
+    }
+  },
+  
+  selectPerk: async (perkId) => {
+    if (!window.roomCode || !window.userId) return;
+    document.querySelectorAll('.perk-btn').forEach(b => {
+      b.classList.remove('border-white', 'bg-white', 'text-black', 'scale-105', 'opacity-100');
+      b.classList.add('opacity-50');
+    });
+    const btn = document.getElementById(`btn-perk-${perkId}`);
+    if (btn) {
+      btn.classList.remove('opacity-50');
+      btn.classList.add('border-white', 'scale-105', 'opacity-100');
+    }
+    document.getElementById('perk-status').innerHTML = `<span class="c-ok font-bold uppercase">Perk ${perkId} carregado. Aguardando Host...</span>`;
+    await updateDoc(getRoomRef(window.roomCode), { [`players.${window.userId}.perk`]: perkId });
+  }
+};
+
+function listenToRoom(code) {
+  onSnapshot(getRoomRef(code), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    window.gameState = data;
+    
+    if (window.isHost) {
+      if (data.status === 'lobby') {
+        const pList = Object.values(data.players || {});
+        document.getElementById('h-lobby-players').innerHTML = pList.map(p => `
+          <div class="flex justify-between items-center border-b border-[#003300] pb-1">
+            <span class="font-bold c-ok">${escapeHtml(p.name)}</span>
+            <span class="c-dim text-sm">${p.perk ? 'PERK OK' : 'escolhendo...'}</span>
+          </div>`).join('');
+        document.getElementById('btn-start-game').disabled = pList.length < 2;
+      }
+      else if (data.status === 'playing') {
+        const up = (data.servers || []).filter(s => s.up).length;
+        const tot = (data.servers || []).length;
+        document.getElementById('hd-servers').innerText = `${up}/${tot}`;
+        document.getElementById('hd-servers').className = `text-3xl font-bold ${up===0 ? 'c-err' : up<tot ? 'c-warn' : 'c-info'}`;
+        
+        document.getElementById('hd-srv-grid').innerHTML = (data.servers || []).map(s => `
+          <div class="border ${s.up ? 'border-[#00ff00] bg-[#002200]' : 'border-[#ff003c] bg-[#330000] animate-pulse'} p-3 flex flex-col justify-between">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-bold ${s.up ? 'c-ok' : 'c-err'}">${s.id}</span>
+              <div class="w-3 h-3 rounded-full ${s.up ? 'bg-[#00ff00]' : 'bg-[#ff003c]'}"></div>
+            </div>
+            <div class="font-mono text-sm ${s.up ? 'c-dim' : 'c-err'}">${s.ip} ${s.up ? '' : '<br>[OFFLINE]'}</div>
+          </div>
+        `).join('');
+        
+        document.getElementById('hd-players').innerHTML = Object.values(data.players || {}).map(p => `
+          <div class="flex justify-between border-b border-[#003300] py-1 ${p.blocked ? 'c-err line-through' : 'c-ok'}">
+            <span class="truncate pr-2">${escapeHtml(p.name)}</span>
+            <span class="font-mono text-xs">${p.ip}</span>
+          </div>`).join('');
+          
+        document.getElementById('hd-events').innerHTML = (data.events || []).map(e => `
+          <div><span class="c-info">[${e.t}]</span> <span class="c-dim">${escapeHtml(e.txt)}</span></div>
+        `).join('');
+      }
+      else if (data.status === 'ended') showEndScreen(data);
+    }
+    
+    if (!window.isHost && data.players && data.players[window.userId]) {
+      const myPlayer = data.players[window.userId];
+      if (data.status === 'playing') {
+        if (document.getElementById('v-player-game').hidden) {
+           window.ui.show('v-player-game');
+           setupTerminalUI(myPlayer);
+        }
+        updateTerminalStatus(myPlayer);
+      }
+      else if (data.status === 'ended' && document.getElementById('v-end').hidden) {
+        showEndScreen(data);
+      }
+    }
+  });
+}
+
+function showEndScreen(data) {
+  window.ui.show('v-end');
+  const title = document.getElementById('end-title');
+  if (data.winner === 'hackers') {
+    title.dataset.text = title.innerText = 'VITÓRIA DOS HACKERS';
+    title.className = 'text-4xl md:text-6xl font-bold uppercase tracking-widest mb-4 glitch c-err';
+  } else {
+    title.dataset.text = title.innerText = 'VITÓRIA DA DEFESA';
+    title.className = 'text-4xl md:text-6xl font-bold uppercase tracking-widest mb-4 glitch c-ok';
+  }
+  document.getElementById('end-reason').innerText = data.winReason;
+  
+  const hackers = Object.values(data.players || {}).filter(p => p.role === 'hacker');
+  const blueteam = Object.values(data.players || {}).filter(p => p.role === 'blueteam');
+  let topHacker = hackers.sort((a, b) => (b.stats?.hacks || 0) - (a.stats?.hacks || 0))[0];
+  let topBlue = blueteam.sort((a, b) => ((b.stats?.restores || 0) + (b.stats?.blocks || 0)) - ((a.stats?.restores || 0) + (a.stats?.blocks || 0)))[0];
+  
+  let mvpHtml = '';
+  if (topHacker && topHacker.stats?.hacks > 0) {
+      mvpHtml += `<div class="border border-[#ff003c] p-4 bg-[#330000] flex-1 min-w-[250px] shadow-[0_0_15px_rgba(255,0,60,0.4)]">
+          <h4 class="text-[#ff003c] font-bold text-sm mb-2 uppercase tracking-widest">MVP Hacker 👑</h4>
+          <div class="text-3xl font-bold text-white mb-2">${escapeHtml(topHacker.name)}</div>
+          <div class="text-lg c-err">Servidores derrubados: ${topHacker.stats.hacks}</div>
+      </div>`;
+  }
+  if (topBlue && ((topBlue.stats?.restores || 0) + (topBlue.stats?.blocks || 0)) > 0) {
+      mvpHtml += `<div class="border border-[#00ff00] p-4 bg-[#002200] flex-1 min-w-[250px] shadow-[0_0_15px_rgba(0,255,0,0.4)]">
+          <h4 class="text-[#00ff00] font-bold text-sm mb-2 uppercase tracking-widest">MVP Blue Team 🛡️</h4>
+          <div class="text-3xl font-bold text-white mb-2">${escapeHtml(topBlue.name)}</div>
+          <div class="text-lg c-ok">Restaurados: ${topBlue.stats.restores} | Bloqueios: ${topBlue.stats.blocks}</div>
+      </div>`;
+  }
+  document.getElementById('end-mvp').innerHTML = mvpHtml;
+
+  const missedMap = {};
+  Object.values(data.players || {}).forEach(p => {
+     (p.stats?.missed || []).forEach(q => { missedMap[q] = (missedMap[q] || 0) + 1; });
+  });
+  const sortedMisses = Object.entries(missedMap).sort((a,b) => b[1] - a[1]);
+  let auditHtml = '<h3 class="c-dim mb-4 border-b border-[#005500] pb-2 font-bold">RELATÓRIO DE AUDITORIA (Conceitos Críticos):</h3>';
+  if(sortedMisses.length === 0) {
+      auditHtml += '<div class="c-ok font-bold">Operação perfeita! Nenhum erro de conceito registrado.</div>';
+  } else {
+      sortedMisses.slice(0, 4).forEach(([q, count]) => {
+          auditHtml += `<div class="mb-2 text-sm"><span class="c-err font-bold">[${count}x Erros]</span> <span class="text-white">${escapeHtml(q)}</span></div>`;
+      });
+  }
+  document.getElementById('end-audit').innerHTML = auditHtml;
+
+  document.getElementById('end-roles').innerHTML = Object.values(data.players || {}).map(p => `
+    <div class="flex justify-between border-b border-[#003300] py-2">
+      <span class="font-bold text-white">${escapeHtml(p.name)}</span>
+      <div class="font-mono text-sm space-x-2">
+        <span class="c-dim">${p.ip}</span>
+        <span class="${p.role==='hacker' ? 'bg-red-900 text-red-400 border border-red-500' : 'bg-blue-900 text-blue-400 border border-blue-500'} px-2 py-1">${p.role === 'hacker' ? 'HACKER' : 'BLUE TEAM'}</span>
+      </div>
+    </div>`).join('');
+}
+
+function setupTerminalUI(p) {
+  document.getElementById('pt-role').innerText = p.role === 'hacker' ? 'HACKER' : 'BLUE TEAM';
+  document.getElementById('pt-role').className = `font-bold px-2 py-0.5 rounded text-black ${p.role === 'hacker' ? 'bg-[#ff003c]' : 'bg-[#00ff00]'}`;
+  document.getElementById('pt-ip').innerText = p.ip;
+  document.getElementById('pt-perk').innerText = p.perk || 'NONE';
+  
+  const cs = document.getElementById('pt-cheatsheet');
+  const btn = "bg-[#050505] border border-[#00ff00] px-3 py-1 rounded text-[#00ff00] shadow-[0_0_5px_rgba(0,255,0,0.2)]";
+  const hl = "text-white font-black";
+  
+  if (p.role === 'hacker') {
+    cs.innerHTML = `
+      <span class="${btn}"><span class="${hl}">attack</span> <span class="c-dim">&lt;ip&gt;</span></span>
+      <span class="${btn}"><span class="${hl}">scan</span></span>
+      <span class="${btn}"><span class="${hl}">jam</span></span>
+      <span class="${btn}"><span class="${hl}">ddos</span> <span class="c-dim">&lt;ip&gt;</span></span>
+      <span class="${btn}"><span class="${hl}">who</span></span>
+      <span class="${btn}"><span class="${hl}">servers</span></span>`;
+  } else {
+    cs.innerHTML = `
+      <span class="${btn}"><span class="${hl}">restore</span> <span class="c-dim">&lt;ip&gt;</span></span>
+      <span class="${btn}"><span class="${hl}">scan</span></span>
+      <span class="${btn}"><span class="${hl}">logs</span> <span class="c-dim">&lt;ip&gt;</span></span>
+      <span class="${btn}"><span class="${hl}">block</span> <span class="c-dim">&lt;ip&gt;</span></span>
+      <span class="${btn}"><span class="${hl}">who</span></span>
+      <span class="${btn}"><span class="${hl}">servers</span></span>`;
+  }
+  
+  window.ui.clear();
+  window.ui.print('Conexão criptografada estabelecida.', 'info');
+  window.ui.print(p.role === 'hacker' ? 'MISSÃO: Derrubar todos os servidores.' : 'MISSÃO: Proteger servidores e bloquear ameaças.', p.role === 'hacker' ? 'err' : 'ok');
+  
+  const input = document.getElementById('pt-in');
+  input.focus();
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      const val = input.value;
+      input.value = '';
+      processTerminalInput(val);
+    }
+  };
+}
+
+function updateTerminalStatus(p) {
+  const input = document.getElementById('pt-in');
+  const prompt = document.getElementById('pt-prompt');
+  
+  if (p.blocked) {
+    input.disabled = true;
+    prompt.innerText = '[BLOCKED]';
+  } else if (p.lockUntil > Date.now()) {
+    input.disabled = true;
+    prompt.innerText = '[LOCKED]';
+    if (!input.dataset.locked) { window.ui.flash('error'); input.dataset.locked = "true"; }
+  } else {
+    input.disabled = false;
+    prompt.innerText = '>';
+    input.dataset.locked = "";
+    if (document.activeElement !== input) input.focus();
+  }
+  
+  if (p.chal && !input.dataset.chalActive) {
+    input.dataset.chalActive = "true";
+    window.ui.print(p.chal.q, 'warn');
+    window.ui.print(p.chal.opts, 'info');
+  } else if (!p.chal) {
+    input.dataset.chalActive = "";
+  }
+}
+
+setInterval(() => {
+  if (!window.gameState || window.gameState.status !== 'playing') return;
+  const now = Date.now();
+  const left = Math.max(0, Math.ceil((window.gameState.endAt - now) / 1000));
+  
+  if (window.isHost) {
+    document.getElementById('hd-timer').innerText = `${Math.floor(left/60)}:${pad(left%60)}`;
+    const upServers = (window.gameState.servers || []).filter(s => s.up).length;
+    const activeHackers = Object.values(window.gameState.players).filter(p => p.role === 'hacker' && !p.blocked).length;
+    let w = null, why = '';
+    if (upServers === 0) { w = 'hackers'; why = 'FALHA CRÍTICA: Todos os servidores foram derrubados!'; }
+    else if (activeHackers === 0) { w = 'blueteam'; why = 'AMEAÇA CONTIDA: Todos os hackers foram bloqueados!'; }
+    else if (left === 0) { w = upServers < window.gameState.servers.length ? 'hackers' : 'blueteam'; why = 'TEMPO ESGOTADO!'; }
+    
+    let hasExpired = false;
+    const batch = {};
+    for(const [uid, p] of Object.entries(window.gameState.players)) {
+      if (p.chal && now > p.chal.dead + 1000) { batch[`players.${uid}.chal`] = null; hasExpired = true; }
+    }
+    if (w) updateDoc(getRoomRef(window.roomCode), { status: 'ended', winner: w, winReason: why });
+    else if (hasExpired) updateDoc(getRoomRef(window.roomCode), batch).catch(()=>{});
+
+  } else if (window.userId && window.gameState.players[window.userId]) {
+    const p = window.gameState.players[window.userId];
+    document.getElementById('pt-time').innerText = left;
+    
+    const statusEl = document.getElementById('pt-status');
+    if (p.blocked) {
+       statusEl.innerHTML = '<span class="bg-[#ff003c] text-white px-4 py-1 animate-pulse font-bold">ACESSO NEGADO: IP BLOQUEADO</span>';
+    } else if (p.lockUntil > now) {
+       statusEl.innerHTML = `<span class="bg-[#ffaa00] text-black px-4 py-1 font-bold">TERMINAL TRAVADO POR ${Math.ceil((p.lockUntil - now)/1000)}s</span>`;
+    } else if (p.chal && p.chal.dead > now) {
+       statusEl.innerHTML = `<span class="bg-[#005500] text-white px-4 py-1 animate-pulse font-bold border border-[#00ff00]">ATENÇÃO: TEMPO DO DESAFIO - ${Math.ceil((p.chal.dead - now)/1000)}s</span>`;
+    } else {
+       statusEl.innerHTML = '';
+    }
+  }
+}, 1000);
+
+async function processTerminalInput(line) {
+  if (!window.userId || !window.gameState || window.gameState.status !== 'playing') return;
+  const p = window.gameState.players[window.userId];
+  if (p.blocked || p.lockUntil > Date.now()) return;
+  
+  window.ui.print(`> ${line}`, 'dim');
+  const args = line.trim().split(/\s+/);
+  const cmd = args[0].toLowerCase();
+  
+  const currentStats = p.stats || { hacks: 0, restores: 0, blocks: 0, missed: [] };
+  
+  if (p.chal) {
+    const isCorrect = line.trim().toUpperCase() === p.chal.a;
+    const roomRef = getRoomRef(window.roomCode);
+    const now = Date.now();
+    
+    if (now > p.chal.dead) {
+       window.ui.print('Tempo esgotado para responder!', 'err');
+    } else if (p.chal.act === 'attack') {
+       if (isCorrect) {
+          window.ui.print(`[SUCESSO] Exploit injetado: ${p.chal.just}`, 'ok');
+          const servers = [...window.gameState.servers];
+          const sIdx = servers.findIndex(s => s.ip === p.chal.targetIp);
+          if (sIdx > -1 && servers[sIdx].up) {
+             servers[sIdx].up = false;
+             servers[sIdx].traces.push({ t: hhmm(), mask: maskIp(p.ip, 1) });
+             window.ui.flash('success');
+             await updateDoc(roomRef, { 
+                 servers, 
+                 [`players.${window.userId}.chal`]: null, 
+                 [`players.${window.userId}.stats.hacks`]: currentStats.hacks + 1,
+                 events: [{t:hhmm(), txt:`ALERTA: Servidor ${servers[sIdx].ip} caiu.`}, ...(window.gameState.events||[]).slice(0,29)] 
+             });
+             return;
+          }
+       } else {
+          window.ui.print(`[ERRO DE CONCEITO] ${p.chal.just}`, 'err');
+          window.ui.flash('error');
+          let updates = { 
+              [`players.${window.userId}.chal`]: null,
+              [`players.${window.userId}.stats.missed`]: [...(currentStats.missed||[]), p.chal.q]
+          };
+          if (p.perk === 'ghost' && !p.ghostUsed) {
+             window.ui.print('[GHOST PROTOCOL] Rastros apagados.', 'info');
+             updates[`players.${window.userId}.ghostUsed`] = true;
+          } else {
+             window.ui.print('Seu IP deixou rastros nos logs.', 'warn');
+             const servers = [...window.gameState.servers];
+             const sIdx = servers.findIndex(s => s.ip === p.chal.targetIp);
+             if (sIdx > -1) { servers[sIdx].traces.push({ t: hhmm(), mask: maskIp(p.ip, 2) }); updates['servers'] = servers; }
+          }
+          await updateDoc(roomRef, updates);
+          return;
+       }
+    } else if (p.chal.act === 'restore') {
+       if (isCorrect) {
+          window.ui.print(`[SUCESSO] Conceito validado: ${p.chal.just}`, 'ok');
+          const servers = [...window.gameState.servers];
+          const sIdx = servers.findIndex(s => s.ip === p.chal.targetIp);
+          if (sIdx > -1 && !servers[sIdx].up) {
+             servers[sIdx].up = true;
+             window.ui.print('Servidor reiniciado.', 'ok');
+             window.ui.flash('success');
+             await updateDoc(roomRef, { 
+                 servers, 
+                 [`players.${window.userId}.chal`]: null, 
+                 [`players.${window.userId}.stats.restores`]: currentStats.restores + 1,
+                 events: [{t:hhmm(), txt:`SISTEMA: Servidor ${servers[sIdx].ip} restaurado.`}, ...(window.gameState.events||[]).slice(0,29)] 
+             });
+             return;
+          }
+       } else {
+          window.ui.print(`[ERRO DE CONCEITO] ${p.chal.just}`, 'err');
+          window.ui.flash('error');
+          await updateDoc(roomRef, { 
+              [`players.${window.userId}.chal`]: null,
+              [`players.${window.userId}.stats.missed`]: [...(currentStats.missed||[]), p.chal.q]
+          });
+          return;
+       }
+    }
+    await updateDoc(getRoomRef(window.roomCode), { [`players.${window.userId}.chal`]: null });
+    return;
+  }
+  
+  if (cmd === 'clear') { window.ui.clear(); return; }
+  
+  if (cmd === 'help') {
+    window.ui.print(p.role === 'hacker' ? '=== MANUAL DO HACKER ===' : '=== MANUAL DO BLUE TEAM ===', 'warn');
+    if (p.role === 'hacker') {
+      window.ui.print('attack <ip> -> Inicia ataque ao alvo. Responda à pergunta teórica.', 'info');
+      window.ui.print('scan        -> Escaneia a rede e sugere um alvo vulnerável.', 'info');
+      window.ui.print('ddos <ip>   -> Trava o terminal de um membro do Blue Team por 12s.', 'info');
+      window.ui.print('jam         -> Causa caos na rede e trava TODOS do Blue Team por 8s.', 'info');
+    } else {
+      window.ui.print('restore <ip>-> Religa um servidor caído. Responda corretamente a questão teórica.', 'info');
+      window.ui.print('scan        -> Analisa a integridade da rede em busca de falhas ativas.', 'info');
+      window.ui.print('logs <ip>   -> Verifica os rastros deixados por um Hacker.', 'info');
+      window.ui.print('block <ip>  -> Bane o IP. Se banir um inocente, VOCÊ toma 15s de stun!', 'info');
+    }
+    return;
+  }
+  
+  const now = Date.now();
+  if (p.cd[cmd] && p.cd[cmd] > now) {
+    return window.ui.print(`Cooldown ativo. Aguarde ${Math.ceil((p.cd[cmd]-now)/1000)}s.`, 'warn');
+  }
+  
+  const getPlayer = (ip) => Object.entries(window.gameState.players).find(([k, v]) => v.ip === ip);
+  const getSrv = (ip) => window.gameState.servers.find(s => s.ip === ip);
+  
+  if (cmd === 'scan') {
+    const total = window.gameState.servers.length;
+    const upServers = window.gameState.servers.filter(s => s.up);
+    const downServers = window.gameState.servers.filter(s => !s.up);
+    const integrity = Math.round((upServers.length / total) * 100);
+    
+    window.ui.print(`[SCANNER] Integridade atual da infraestrutura: ${integrity}%`, 'info');
+    
+    if (p.role === 'hacker') {
+        if (upServers.length > 0) {
+            const hintTarget = upServers[rnd(0, upServers.length - 1)];
+            window.ui.print(`[VULNERABILIDADE DETECTADA] Alvo viável sugerido: ${hintTarget.ip}`, 'warn');
+        } else {
+            window.ui.print(`[SCANNER] Todos os alvos já estão offline. Missão cumprida.`, 'ok');
+        }
+    } else {
+        if (downServers.length > 0) {
+            const hintTarget = downServers[rnd(0, downServers.length - 1)];
+            window.ui.print(`[EMERGÊNCIA DE REDE] Servidor inoperante localizado em: ${hintTarget.ip}`, 'err');
+        } else {
+            window.ui.print(`[SCANNER] Monitoramento limpo. Nenhum incidente ativo no momento.`, 'ok');
+        }
+    }
+    return;
+  }
+  
+  if (cmd === 'servers') {
+    const output = window.gameState.servers.map(s => {
+      const clickScript = `const i=document.getElementById('pt-in'); i.value = i.value.trim() + ' ${s.ip}'; i.focus();`;
+      return `<span class="cursor-pointer text-white underline hover:text-[#00ff00]" onclick="${clickScript}">${s.ip.padEnd(15)}</span> ${s.up ? '<span class="c-ok">[ONLINE]</span>' : '<span class="c-err">[OFFLINE] &lt;&lt;&lt;</span>'}`;
+    });
+    window.ui.print(output, 'info');
+  }
+  else if (cmd === 'who') {
+    const list = Object.values(window.gameState.players).sort((a,b)=>a.ip.localeCompare(b.ip))
+      .map(q => `<span class="text-white cursor-pointer underline hover:text-[#00ff00]" onclick="const i=document.getElementById('pt-in'); i.value = i.value.trim() + ' ${q.ip}'; i.focus();">${q.ip.padEnd(15)}</span> ${q.blocked ? '(BLOQUEADO)' : '(ativo)'} ${p.role==='hacker' && q.role==='hacker' ? ' [ALIADO]' : ''}`);
+    window.ui.print(list, 'info');
+  }
+  else if (p.role === 'hacker' && cmd === 'attack') {
+    const target = args[1]; const srv = getSrv(target);
+    if(!srv) return window.ui.print('Uso: attack <ip_servidor>', 'err');
+    if(!srv.up) return window.ui.print('Servidor já está offline.', 'warn');
+    
+    const cdTime = p.perk === 'overclock' ? 4000 : 6000;
+    const qz = quizQuestions[rnd(0, quizQuestions.length - 1)];
+    await updateDoc(getRoomRef(window.roomCode), {
+      [`players.${window.userId}.cd.attack`]: now + cdTime,
+      [`players.${window.userId}.chal`]: { act: 'attack', targetIp: target, q: qz.q, opts: qz.opts, a: qz.a, just: qz.just, dead: now + 12000 }
+    });
+  }
+  else if (p.role === 'hacker' && cmd === 'jam') {
+    window.ui.print('Enviando pico de tráfego (JAM) na rede...', 'ok');
+    const updates = { [`players.${window.userId}.cd.jam`]: now + 25000 };
+    Object.entries(window.gameState.players).forEach(([uid, q]) => {
+      if(q.role === 'blueteam') updates[`players.${uid}.lockUntil`] = Math.max(q.lockUntil||0, now + 8000);
+    });
+    updates['events'] = [{t:hhmm(), txt:`ALERTA CRÍTICO: Ataque JAM detectado. Terminais da defesa travados.`}, ...(window.gameState.events||[]).slice(0,29)];
+    await updateDoc(getRoomRef(window.roomCode), updates);
+  }
+  else if (p.role === 'hacker' && cmd === 'ddos') {
+    const target = args[1]; const t = getPlayer(target);
+    if(!t || t[1].role !== 'blueteam') return window.ui.print('Alvo inválido. Use IP do Blue Team.', 'err');
+    const stun = t[1].perk === 'firewall' ? 6000 : 12000;
+    await updateDoc(getRoomRef(window.roomCode), {
+      [`players.${window.userId}.cd.ddos`]: now + 15000,
+      [`players.${t[0]}.lockUntil`]: Math.max(t[1].lockUntil||0, now + stun),
+      events: [{t:hhmm(), txt:`Uma anomalia de tráfego isolada atingiu um nó de defesa.`}, ...(window.gameState.events||[]).slice(0,29)]
+    });
+    window.ui.print(`DDoS disparado contra ${target}.`, 'ok');
+  }
+  else if (p.role === 'blueteam' && cmd === 'logs') {
+    const target = args[1]; const srv = getSrv(target);
+    if(!srv) return window.ui.print('Uso: logs <ip_servidor>', 'err');
+    if(!srv.traces || srv.traces.length === 0) return window.ui.print('Nenhum rastro encontrado.', 'dim');
+    window.ui.print(srv.traces.map(tr => `[${tr.t}] Forense: Origem ${p.perk==='tracer'?'(Tracer) ':''}-> ${p.perk==='tracer' ? tr.mask.replace('***', rnd(10,99).toString()) : tr.mask}`), 'warn');
+  }
+  else if (p.role === 'blueteam' && cmd === 'restore') {
+    const target = args[1]; const srv = getSrv(target);
+    if(!srv) return window.ui.print('Uso: restore <ip_servidor>', 'err');
+    if(srv.up) return window.ui.print('Servidor já está operacional.', 'warn');
+    
+    // Se o hacker tiver o perk rootkit, o tempo de resposta base para restaurar dobra (ou fica mais restrito)
+    let respTime = p.perk === 'sysadmin' ? 24000 : 12000; 
+    const anyHackerHasRootkit = Object.values(window.gameState.players).some(pl => pl.role === 'hacker' && pl.perk === 'rootkit');
+    if (anyHackerHasRootkit && p.perk !== 'sysadmin') respTime = 8000; // Menos tempo se o rootkit estiver ativo na partida!
+    
+    const qz = quizQuestions[rnd(0, quizQuestions.length - 1)];
+    if(p.perk === 'sysadmin') window.ui.print(`[SYSADMIN] Bypass estendido. Você tem o dobro do tempo.`, 'info');
+    if(anyHackerHasRootkit) window.ui.print(`[ALERTA] Servidor infectado com ROOTKIT! O tempo limite de resposta está reduzido.`, 'err');
+
+    await updateDoc(getRoomRef(window.roomCode), {
+      [`players.${window.userId}.cd.restore`]: now + 5000,
+      [`players.${window.userId}.chal`]: { act: 'restore', targetIp: target, q: qz.q, opts: qz.opts, a: qz.a, just: qz.just, dead: now + respTime }
+    });
+  }
+  else if (p.role === 'blueteam' && cmd === 'block') {
+    const target = args[1]; const t = getPlayer(target);
+    if(!t) return window.ui.print('IP alvo não encontrado.', 'err');
+    const updates = { [`players.${window.userId}.cd.block`]: now + 8000 };
+    
+    if (t[1].role === 'hacker' && !t[1].blocked) {
+      updates[`players.${t[0]}.blocked`] = true;
+      updates[`players.${window.userId}.stats.blocks`] = currentStats.blocks + 1;
+      updates['events'] = [{t:hhmm(), txt:`[DEFESA] Firewalls neutralizaram ${target}!`}, ...(window.gameState.events||[]).slice(0,29)];
+      window.ui.print('SUCESSO! Hacker bloqueado permanentemente.', 'ok'); window.ui.flash('success');
+    } else {
+      updates[`players.${window.userId}.lockUntil`] = now + 15000; 
+      window.ui.print('ERRO: Você bloqueou um IP inocente. Penalidade (15s travado).', 'err'); window.ui.flash('error');
+    }
+    await updateDoc(getRoomRef(window.roomCode), updates);
+  }
+  else {
+    window.ui.print(`Comando não reconhecido: ${cmd}`, 'err');
+  }
+}
+</script>
+</body>
+</html>
